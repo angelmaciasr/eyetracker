@@ -66,10 +66,12 @@ Controles dentro de la ventana:
 - `R`: recalibrar.
 - `M`: silenciar o reactivar la alarma durante la sesión.
 
-Durante la calibración sigue las instrucciones para mirar de frente, abajo, arriba, a la izquierda
-y a la derecha sin cerrar ni entornar los ojos. Mantén una distancia estable y usa luz uniforme.
-Si las posturas o las referencias abierta/cerrada no se distinguen suficientemente, el proceso
-se rechaza en lugar de guardar un perfil malo.
+Durante la calibración, cada fase espera a que estés preparado y pulses `Espacio`. Sigue las
+instrucciones para mirar de frente, abajo, arriba, a la izquierda y a la derecha sin cerrar ni
+entornar los ojos. Una confirmación sonora indica que cada fase ha terminado. Mantén una
+distancia estable y usa luz uniforme. Si una postura o las referencias abierta/cerrada no se
+distinguen suficientemente, la calibración muestra el error y permite reiniciarla con `Espacio`
+sin cerrar la aplicación.
 
 ## Configuración
 

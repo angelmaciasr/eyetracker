@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 
 from eyetracker.adapters.display import OpenCVDisplay
@@ -20,3 +21,8 @@ def test_drawing_eye_contours_and_history_graph_does_not_raise():
     display._history.extend((1.0, 0.5, 0.1))
     display._draw_graph(canvas, y_top=100, width=180, height=80)
     assert np.count_nonzero(canvas) > 0
+
+
+def test_space_key_continues_calibration(monkeypatch):
+    monkeypatch.setattr(cv2, "waitKey", lambda _: ord(" "))
+    assert OpenCVDisplay().poll_key() == "continue"

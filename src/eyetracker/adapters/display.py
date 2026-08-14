@@ -119,6 +119,8 @@ class OpenCVDisplay:
             return "recalibrate"
         if key == ord("m"):
             return "mute"
+        if key == ord(" "):
+            return "continue"
         return None
 
     def close(self) -> None:

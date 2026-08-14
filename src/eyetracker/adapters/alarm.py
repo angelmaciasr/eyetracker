@@ -23,6 +23,10 @@ class SoundAlarm:
     def deactivate(self) -> None:
         self._active.clear()
 
+    def notify(self) -> None:
+        """Reproduce una confirmación breve sin activar la alarma repetitiva."""
+        threading.Thread(target=self._play_once, name="calibration-chime", daemon=True).start()
+
     def is_active(self) -> bool:
         return self._active.is_set()
 

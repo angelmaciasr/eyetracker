@@ -73,7 +73,14 @@ def build_application(config: AppConfig, root: Path) -> Application:
     detector = TemporalDrowsinessDetector(config.detector)
     repository = JsonCalibrationRepository(calibration_path)
     calibration_controller = CalibrationController(
-        camera, tracker, measurement, calibrator, display, repository, config.calibration
+        camera,
+        tracker,
+        measurement,
+        calibrator,
+        alarm,
+        display,
+        repository,
+        config.calibration,
     )
     monitoring_controller = MonitoringController(
         camera, tracker, measurement, calibrator, detector, alarm, display

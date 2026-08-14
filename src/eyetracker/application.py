@@ -27,16 +27,29 @@ class CalibrationController:
     tracker: FaceTrackerPort
     measurement: EAREyeMeasurementService
     calibrator: PersonalCalibrationService
+    alarm: SoundAlarm
     display: DisplayPort
     repository: JsonCalibrationRepository
     config: CalibrationConfig
 
     def run(self) -> CalibrationProfile:
+        wait_for_first_step = True
+        while True:
+            try:
+                return self._run_once(wait_for_first_step)
+            except CalibrationError as error:
+                print(f"Calibración no válida: {error}. Se reiniciará.")
+                self._wait_for_space("CALIBRACIÓN FALLIDA - ESPACIO PARA REINICIAR")
+                wait_for_first_step = False
+
+    def _run_once(self, wait_for_first_step: bool) -> CalibrationProfile:
         self.measurement.reset()
         self.calibrator.begin()
         open_started: float | None = None
 
         # Fase 1: aprender la apertura habitual.
+        if wait_for_first_step:
+            self._wait_for_space("FRONTAL - pulsa ESPACIO para empezar")
         while True:
             frame = self.camera.read()
             if frame is None:
@@ -56,6 +69,7 @@ class CalibrationController:
             self._check_quit()
             if open_started is not None and elapsed >= self.config.open_seconds:
                 break
+        self.alarm.notify()
 
         left_open, right_open = self.calibrator.provisional_open_ear()
         combined_open = (left_open + right_open) / 2.0
@@ -81,6 +95,7 @@ class CalibrationController:
         )
 
         # Fase 3: medir cinco parpadeos naturales con un umbral provisional.
+        self._wait_for_space("PARPADEOS - pulsa ESPACIO para empezar")
         phase_started = frame.timestamp
         in_blink = False
         blink_started = 0.0
@@ -119,8 +134,10 @@ class CalibrationController:
             self._check_quit()
             if frame.timestamp - phase_started > self.config.blink_timeout_seconds:
                 raise CalibrationError("No se detectaron los parpadeos a tiempo")
+        self.alarm.notify()
 
         # Fase 4: exigir un cierre continuo y recoger su referencia geométrica.
+        self._wait_for_space("OJOS CERRADOS - pulsa ESPACIO para empezar")
         phase_started = frame.timestamp
         closed_started: float | None = None
         while True:
@@ -152,6 +169,7 @@ class CalibrationController:
                 raise CalibrationError("No se obtuvo un cierre mantenido")
 
         profile = self.calibrator.finish()
+        self.alarm.notify()
         self.repository.save(profile)
         return profile
 
@@ -160,6 +178,7 @@ class CalibrationController:
         phase: CalibrationPhase,
         message: str,
     ) -> VideoFrame:
+        self._wait_for_space(f"{message} - pulsa ESPACIO")
         settle_started: float | None = None
         collect_started: float | None = None
         while True:
@@ -185,7 +204,22 @@ class CalibrationController:
             )
             self._check_quit()
             if collect_started is not None and elapsed >= self.config.pose_seconds:
+                self.alarm.notify()
                 return frame
+
+    def _wait_for_space(self, message: str) -> None:
+        while True:
+            frame = self.camera.read()
+            if frame is None:
+                continue
+            face = self.tracker.track(frame)
+            raw = self.measurement.measure(face) if face.status is TrackingStatus.VALID else None
+            self.display.render_calibration(frame, face, raw, message, 0.0)
+            key = self.display.poll_key()
+            if key == "quit":
+                raise UserQuit
+            if key == "continue":
+                return
 
     def _check_quit(self) -> None:
         if self.display.poll_key() == "quit":
