@@ -1,0 +1,39 @@
+[camera]
+device_index = 0
+width = 1280
+height = 720
+target_fps = 30
+
+[tracker]
+model_path = "models/face_landmarker.task"
+min_face_detection_confidence = 0.55
+min_face_presence_confidence = 0.55
+min_tracking_confidence = 0.55
+
+[measurement]
+smoothing_window = 3
+minimum_ear = 0.02
+maximum_ear = 1.00
+
+[calibration]
+open_seconds = 3.0
+required_blinks = 5
+blink_timeout_seconds = 20.0
+closed_seconds = 1.0
+closed_timeout_seconds = 10.0
+provisional_closed_ratio = 0.60
+provisional_reopened_ratio = 0.80
+minimum_samples = 12
+
+[detector]
+closed_threshold = 0.75
+reopened_threshold = 0.85
+minimum_blink_seconds = 0.08
+maximum_blink_seconds = 0.40
+alert_after_closed_seconds = 1.00
+
+[alarm]
+repeat_seconds = 0.9
+
+[storage]
+calibration_path = "data/calibration.json"
