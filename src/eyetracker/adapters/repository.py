@@ -14,7 +14,7 @@ class JsonCalibrationRepository:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_suffix(self.path.suffix + ".tmp")
         temporary.write_text(
-            json.dumps({"version": 1, "profile": profile.to_dict()}, indent=2),
+            json.dumps({"version": 4, "profile": profile.to_dict()}, indent=2),
             encoding="utf-8",
         )
         temporary.replace(self.path)
@@ -24,7 +24,7 @@ class JsonCalibrationRepository:
             return None
         try:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
-            if payload.get("version") != 1:
+            if payload.get("version") != 4:
                 return None
             return CalibrationProfile.from_dict(payload["profile"])
         except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):

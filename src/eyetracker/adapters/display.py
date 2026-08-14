@@ -44,6 +44,14 @@ class OpenCVDisplay:
         self._text(canvas, f"FPS: {self._fps:4.1f}", 14, 55)
         if raw is not None:
             self._text(canvas, f"EAR I/D: {raw.left_ear:.3f} / {raw.right_ear:.3f}", 150, 55)
+        if face.head_pose is not None:
+            pose = face.head_pose
+            self._text(
+                canvas,
+                f"Pose P/Y/R: {pose.pitch:+.1f} / {pose.yaw:+.1f} / {pose.roll:+.1f}",
+                430,
+                55,
+            )
         if relative is not None:
             self._text(canvas, f"Apertura: {relative.combined_openness:.2f}", 14, 82)
         self._text(canvas, f"Cierre: {assessment.current_closure_seconds:.2f} s", 210, 82)
@@ -53,6 +61,14 @@ class OpenCVDisplay:
         if assessment.state is DrowsinessState.ALERT:
             cv2.rectangle(canvas, (3, 3), (frame.width - 4, frame.height - 4), color, 8)
             self._center_text(canvas, "ALERTA: ABRE LOS OJOS", frame.height // 2, color, 1.15)
+        elif relative is not None and not relative.pose_valid:
+            self._center_text(
+                canvas,
+                "ÁNGULO TODAVÍA NO CALIBRADO",
+                frame.height // 2,
+                (80, 210, 250),
+                0.9,
+            )
         cv2.imshow(self.WINDOW_NAME, canvas)
 
     def render_calibration(
@@ -81,8 +97,15 @@ class OpenCVDisplay:
                 canvas, "No se detecta una cara", frame.height - 40, (60, 80, 255), 0.72
             )
         elif raw is not None:
+            pose_text = ""
+            if face.head_pose is not None:
+                pose = face.head_pose
+                pose_text = f"   Pose {pose.pitch:+.1f}/{pose.yaw:+.1f}/{pose.roll:+.1f}"
             self._text(
-                canvas, f"EAR {raw.left_ear:.3f} / {raw.right_ear:.3f}", 12, frame.height - 15
+                canvas,
+                f"EAR {raw.left_ear:.3f} / {raw.right_ear:.3f}{pose_text}",
+                12,
+                frame.height - 15,
             )
         cv2.imshow(self.WINDOW_NAME, canvas)
 

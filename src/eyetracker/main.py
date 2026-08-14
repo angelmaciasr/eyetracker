@@ -42,7 +42,10 @@ def main(argv: list[str] | None = None) -> int:
             app.calibrator.load_profile(profile)
             print("Calibración guardada cargada. Pulsa R para repetirla.")
         else:
-            print("Iniciando calibración: ojos abiertos, 5 parpadeos y cierre mantenido.")
+            print(
+                "Iniciando calibración: frontal, abajo, arriba, izquierda, derecha, "
+                "5 parpadeos y cierre mantenido."
+            )
             profile = app.calibration_controller.run()
         app.monitoring_controller.detector.apply_calibration(profile)
         while True:

@@ -9,6 +9,7 @@ from .domain import (
     CalibrationPhase,
     CalibrationProfile,
     TrackingStatus,
+    VideoFrame,
 )
 from .ports import CameraPort, DisplayPort, FaceTrackerPort
 from .services.calibration import CalibrationError, PersonalCalibrationService
@@ -61,7 +62,25 @@ class CalibrationController:
         closed_threshold = combined_open * self.config.provisional_closed_ratio
         reopened_threshold = combined_open * self.config.provisional_reopened_ratio
 
-        # Fase 2: medir cinco parpadeos naturales con un umbral provisional.
+        # Fase 2: aprender cómo deforma el ángulo vertical la apertura aparente.
+        frame = self._collect_pose_phase(
+            CalibrationPhase.LOOK_DOWN,
+            "Mira hacia ABAJO con los ojos abiertos",
+        )
+        frame = self._collect_pose_phase(
+            CalibrationPhase.LOOK_UP,
+            "Mira hacia ARRIBA con los ojos abiertos",
+        )
+        frame = self._collect_pose_phase(
+            CalibrationPhase.LOOK_LEFT,
+            "Mira hacia tu IZQUIERDA con los ojos abiertos",
+        )
+        frame = self._collect_pose_phase(
+            CalibrationPhase.LOOK_RIGHT,
+            "Mira hacia tu DERECHA con los ojos abiertos",
+        )
+
+        # Fase 3: medir cinco parpadeos naturales con un umbral provisional.
         phase_started = frame.timestamp
         in_blink = False
         blink_started = 0.0
@@ -101,7 +120,7 @@ class CalibrationController:
             if frame.timestamp - phase_started > self.config.blink_timeout_seconds:
                 raise CalibrationError("No se detectaron los parpadeos a tiempo")
 
-        # Fase 3: exigir un cierre continuo y recoger su referencia geométrica.
+        # Fase 4: exigir un cierre continuo y recoger su referencia geométrica.
         phase_started = frame.timestamp
         closed_started: float | None = None
         while True:
@@ -135,6 +154,38 @@ class CalibrationController:
         profile = self.calibrator.finish()
         self.repository.save(profile)
         return profile
+
+    def _collect_pose_phase(
+        self,
+        phase: CalibrationPhase,
+        message: str,
+    ) -> VideoFrame:
+        settle_started: float | None = None
+        collect_started: float | None = None
+        while True:
+            frame = self.camera.read()
+            if frame is None:
+                continue
+            face = self.tracker.track(frame)
+            raw = self.measurement.measure(face) if face.status is TrackingStatus.VALID else None
+            settle_started = settle_started or frame.timestamp
+            settled = frame.timestamp - settle_started >= self.config.pose_settle_seconds
+            if settled and raw is not None and raw.reliable and raw.head_pose is not None:
+                collect_started = collect_started or raw.timestamp
+                self.calibrator.add_sample(phase, raw)
+                elapsed = raw.timestamp - collect_started
+            else:
+                elapsed = 0.0
+            self.display.render_calibration(
+                frame,
+                face,
+                raw,
+                message,
+                elapsed / self.config.pose_seconds,
+            )
+            self._check_quit()
+            if collect_started is not None and elapsed >= self.config.pose_seconds:
+                return frame
 
     def _check_quit(self) -> None:
         if self.display.poll_key() == "quit":

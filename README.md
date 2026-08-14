@@ -12,16 +12,18 @@ ni se envía a ningún servidor.
 - Una cara y una webcam local.
 - MediaPipe Face Landmarker para localizar seis puntos de cada ojo.
 - EAR (Eye Aspect Ratio) filtrado con una mediana corta.
-- Calibración personal: 3 s con ojos abiertos, 5 parpadeos y 1 s de cierre mantenido.
+- Calibración personal: frontal, abajo/arriba, izquierda/derecha, parpadeos y cierre.
 - Apertura relativa independiente para cada ojo.
+- Estimación de orientación `pitch`, `yaw` y `roll`, calibrada respecto a la postura neutral.
+- Corrección del EAR por los ángulos vertical y horizontal aprendidos para cada persona.
 - Máquina temporal con histéresis: despierto, parpadeo, cierre, alerta y tracking perdido.
 - Alarma repetida cuando la apertura relativa permanece por debajo de `0.75` durante 1 s.
 - Vista de depuración con landmarks, EAR, apertura, duración, FPS, contador y gráfica.
 - Perfil de calibración persistente en `data/calibration.json`.
 - Pruebas unitarias de la geometría, calibración y lógica temporal.
 
-PERCLOS, dirección de mirada, orientación de cabeza, varias caras y reconocimiento de
-identidad quedan deliberadamente fuera de este MVP.
+PERCLOS, dirección de mirada, varias caras y reconocimiento de identidad quedan
+deliberadamente fuera de este MVP.
 
 ## Requisitos
 
@@ -64,9 +66,10 @@ Controles dentro de la ventana:
 - `R`: recalibrar.
 - `M`: silenciar o reactivar la alarma durante la sesión.
 
-Durante la calibración conviene mirar de frente, mantener una distancia estable y usar luz
-uniforme. Si no se distinguen suficientemente las referencias abierta/cerrada, el proceso se
-rechaza en lugar de guardar un perfil malo.
+Durante la calibración sigue las instrucciones para mirar de frente, abajo, arriba, a la izquierda
+y a la derecha sin cerrar ni entornar los ojos. Mantén una distancia estable y usa luz uniforme.
+Si las posturas o las referencias abierta/cerrada no se distinguen suficientemente, el proceso
+se rechaza en lugar de guardar un perfil malo.
 
 ## Configuración
 
@@ -83,6 +86,23 @@ alert_after_closed_seconds = 1.00
 
 Los umbrales `closed_threshold` y `reopened_threshold` se aplican a la apertura relativa ya
 calibrada, no al EAR bruto. La diferencia entre ambos crea histéresis y evita oscilaciones.
+
+La calibración aprende los extremos verticales y horizontales. La apertura esperada de cada ojo
+se interpola por separado, ya que al girar la cabeza un ojo puede deformarse más que el otro:
+
+```toml
+[head_pose]
+pitch_range_margin = 5.0
+yaw_range_margin = 5.0
+maximum_roll_delta = 20.0
+minimum_calibration_pitch_span = 12.0
+minimum_calibration_yaw_span = 15.0
+```
+
+La aplicación acepta los intervalos que tú hayas recorrido, más cinco grados de margen en cada
+eje. Solo fuera de esos intervalos muestra `ÁNGULO TODAVÍA NO CALIBRADO`, reinicia cualquier
+cierre en curso y evita la alarma. Es necesario recalibrar tras actualizar desde una versión
+anterior.
 
 ## Desarrollo y pruebas
 

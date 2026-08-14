@@ -69,7 +69,7 @@ def build_application(config: AppConfig, root: Path) -> Application:
     display = OpenCVDisplay(config.detector.closed_threshold)
     alarm = SoundAlarm(config.alarm)
     measurement = EAREyeMeasurementService(config.measurement)
-    calibrator = PersonalCalibrationService(config.calibration)
+    calibrator = PersonalCalibrationService(config.calibration, config.head_pose)
     detector = TemporalDrowsinessDetector(config.detector)
     repository = JsonCalibrationRepository(calibration_path)
     calibration_controller = CalibrationController(

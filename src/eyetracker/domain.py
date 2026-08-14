@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import MISSING, asdict, dataclass
 from enum import StrEnum
 from typing import Any
 
@@ -15,6 +15,10 @@ class TrackingStatus(StrEnum):
 
 class CalibrationPhase(StrEnum):
     OPEN = "open"
+    LOOK_DOWN = "look_down"
+    LOOK_UP = "look_up"
+    LOOK_LEFT = "look_left"
+    LOOK_RIGHT = "look_right"
     BLINKING = "blinking"
     CLOSED = "closed"
 
@@ -34,6 +38,13 @@ class Point2D:
 
 
 @dataclass(frozen=True)
+class HeadPose:
+    pitch: float
+    yaw: float
+    roll: float
+
+
+@dataclass(frozen=True)
 class VideoFrame:
     frame_id: int
     timestamp: float
@@ -49,6 +60,7 @@ class FaceObservation:
     left_eye: tuple[Point2D, ...] = ()
     right_eye: tuple[Point2D, ...] = ()
     confidence: float = 0.0
+    head_pose: HeadPose | None = None
 
 
 @dataclass(frozen=True)
@@ -57,6 +69,7 @@ class RawEyeMeasurement:
     left_ear: float
     right_ear: float
     reliable: bool
+    head_pose: HeadPose | None = None
 
     @property
     def combined_ear(self) -> float:
@@ -70,6 +83,8 @@ class RelativeEyeMeasurement:
     right_openness: float
     combined_openness: float
     reliable: bool
+    head_pose: HeadPose | None = None
+    pose_valid: bool = True
 
 
 @dataclass(frozen=True)
@@ -83,13 +98,34 @@ class CalibrationProfile:
     left_blink_min_ear: float
     right_blink_min_ear: float
     measurement_noise: float
+    neutral_pitch: float = 0.0
+    neutral_yaw: float = 0.0
+    neutral_roll: float = 0.0
+    pitch_lower_delta: float = -15.0
+    pitch_upper_delta: float = 15.0
+    left_open_ear_at_pitch_lower: float = 0.0
+    right_open_ear_at_pitch_lower: float = 0.0
+    left_open_ear_at_pitch_upper: float = 0.0
+    right_open_ear_at_pitch_upper: float = 0.0
+    yaw_lower_delta: float = -20.0
+    yaw_upper_delta: float = 20.0
+    left_open_ear_at_yaw_lower: float = 0.0
+    right_open_ear_at_yaw_lower: float = 0.0
+    left_open_ear_at_yaw_upper: float = 0.0
+    right_open_ear_at_yaw_upper: float = 0.0
 
     def to_dict(self) -> dict[str, float]:
         return asdict(self)
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> CalibrationProfile:
-        return cls(**{key: float(values[key]) for key in cls.__dataclass_fields__})
+        parsed: dict[str, float] = {}
+        for key, field in cls.__dataclass_fields__.items():
+            if key in values:
+                parsed[key] = float(values[key])
+            elif field.default is not MISSING:
+                parsed[key] = float(field.default)
+        return cls(**parsed)
 
 
 @dataclass(frozen=True)

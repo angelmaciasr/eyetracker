@@ -4,6 +4,7 @@ from pathlib import Path
 
 from ..config import TrackerConfig
 from ..domain import FaceObservation, Point2D, TrackingStatus, VideoFrame
+from ..services.head_pose import head_pose_from_transform
 
 # Los seis puntos conservan el orden requerido por EAR. "Left" y "right" se
 # refieren a los ojos de la persona observada, no al lado de la imagen.
@@ -28,6 +29,7 @@ class MediaPipeFaceTracker:
             min_face_detection_confidence=self.config.min_face_detection_confidence,
             min_face_presence_confidence=self.config.min_face_presence_confidence,
             min_tracking_confidence=self.config.min_tracking_confidence,
+            output_facial_transformation_matrixes=True,
         )
         self._landmarker = mp.tasks.vision.FaceLandmarker.create_from_options(options)
 
@@ -48,6 +50,12 @@ class MediaPipeFaceTracker:
         if not result.face_landmarks:
             return FaceObservation(frame.timestamp, TrackingStatus.NO_FACE)
         landmarks = result.face_landmarks[0]
+        head_pose = None
+        if result.facial_transformation_matrixes:
+            try:
+                head_pose = head_pose_from_transform(result.facial_transformation_matrixes[0])
+            except (ValueError, ArithmeticError):
+                head_pose = None
 
         def points(indices: tuple[int, ...]) -> tuple[Point2D, ...]:
             return tuple(Point2D(landmarks[index].x, landmarks[index].y) for index in indices)
@@ -58,6 +66,7 @@ class MediaPipeFaceTracker:
             left_eye=points(LEFT_EYE_INDICES),
             right_eye=points(RIGHT_EYE_INDICES),
             confidence=1.0,
+            head_pose=head_pose,
         )
 
     def close(self) -> None:

@@ -30,8 +30,19 @@ class MeasurementConfig:
 
 
 @dataclass(frozen=True)
+class HeadPoseConfig:
+    pitch_range_margin: float = 5.0
+    yaw_range_margin: float = 5.0
+    maximum_roll_delta: float = 20.0
+    minimum_calibration_pitch_span: float = 12.0
+    minimum_calibration_yaw_span: float = 15.0
+
+
+@dataclass(frozen=True)
 class CalibrationConfig:
     open_seconds: float = 3.0
+    pose_seconds: float = 2.0
+    pose_settle_seconds: float = 1.0
     required_blinks: int = 5
     blink_timeout_seconds: float = 20.0
     closed_seconds: float = 1.0
@@ -65,6 +76,7 @@ class AppConfig:
     camera: CameraConfig
     tracker: TrackerConfig
     measurement: MeasurementConfig
+    head_pose: HeadPoseConfig
     calibration: CalibrationConfig
     detector: DetectorConfig
     alarm: AlarmConfig
@@ -82,6 +94,7 @@ def load_config(path: Path) -> AppConfig:
         camera=_section(data, "camera", CameraConfig),
         tracker=_section(data, "tracker", TrackerConfig),
         measurement=_section(data, "measurement", MeasurementConfig),
+        head_pose=_section(data, "head_pose", HeadPoseConfig),
         calibration=_section(data, "calibration", CalibrationConfig),
         detector=_section(data, "detector", DetectorConfig),
         alarm=_section(data, "alarm", AlarmConfig),

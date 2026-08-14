@@ -15,8 +15,17 @@ smoothing_window = 3
 minimum_ear = 0.02
 maximum_ear = 1.00
 
+[head_pose]
+pitch_range_margin = 5.0
+yaw_range_margin = 5.0
+maximum_roll_delta = 20.0
+minimum_calibration_pitch_span = 12.0
+minimum_calibration_yaw_span = 15.0
+
 [calibration]
 open_seconds = 3.0
+pose_seconds = 2.0
+pose_settle_seconds = 1.0
 required_blinks = 5
 blink_timeout_seconds = 20.0
 closed_seconds = 1.0

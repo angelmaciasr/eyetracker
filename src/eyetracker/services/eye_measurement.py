@@ -42,7 +42,9 @@ class EAREyeMeasurementService:
             self.config.minimum_ear <= value <= self.config.maximum_ear for value in (left, right)
         )
         if not reliable:
-            return RawEyeMeasurement(observation.timestamp, left, right, False)
+            return RawEyeMeasurement(
+                observation.timestamp, left, right, False, observation.head_pose
+            )
         self._left.append(left)
         self._right.append(right)
         return RawEyeMeasurement(
@@ -50,4 +52,5 @@ class EAREyeMeasurementService:
             statistics.median(self._left),
             statistics.median(self._right),
             True,
+            observation.head_pose,
         )
