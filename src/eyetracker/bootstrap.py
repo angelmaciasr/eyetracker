@@ -27,7 +27,7 @@ def ensure_model(path: Path) -> None:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".download")
-    print(f"Descargando el modelo de MediaPipe en {path}...")
+    print(f"Downloading the MediaPipe model to {path}...")
     try:
         with (
             urllib.request.urlopen(MODEL_URL, timeout=60) as response,
@@ -35,7 +35,7 @@ def ensure_model(path: Path) -> None:
         ):
             shutil.copyfileobj(response, output)
         if temporary.stat().st_size < 1_000_000:
-            raise RuntimeError("La descarga del modelo está incompleta")
+            raise RuntimeError("The model download is incomplete")
         temporary.replace(path)
     except Exception:
         temporary.unlink(missing_ok=True)

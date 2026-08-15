@@ -20,6 +20,15 @@ def test_drawing_eye_contours_and_history_graph_does_not_raise():
     display._draw_eyes(canvas, face)
     display._history.extend((1.0, 0.5, 0.1))
     display._draw_graph(canvas, y_top=100, width=180, height=80)
+    display._center_multiline(
+        canvas,
+        "Step 1/7: Keep your eyes open. Press SPACE to start and wait for the sound.",
+        20,
+        (255, 255, 255),
+        0.5,
+        max_width=250,
+        line_height=20,
+    )
     assert np.count_nonzero(canvas) > 0
 
 

@@ -2,7 +2,7 @@ import pytest
 
 from eyetracker.config import CalibrationConfig
 from eyetracker.domain import CalibrationPhase, HeadPose, RawEyeMeasurement
-from eyetracker.services.calibration import PersonalCalibrationService
+from eyetracker.services.calibration import CalibrationError, PersonalCalibrationService
 
 
 def sample(
@@ -96,3 +96,17 @@ def test_yaw_calibration_compensates_each_eye_independently(
     assert normalized.pose_valid
     assert normalized.left_openness == pytest.approx(1.0)
     assert normalized.right_openness == pytest.approx(1.0)
+
+
+def test_clearing_failed_last_step_preserves_previous_calibration_steps():
+    service = calibrated_service()
+    service.clear_phase(CalibrationPhase.CLOSED)
+
+    service.provisional_open_ear()
+    service.validate_pose_phase(CalibrationPhase.LOOK_DOWN)
+    service.validate_pose_phase(CalibrationPhase.LOOK_UP, CalibrationPhase.LOOK_DOWN)
+    service.validate_pose_phase(CalibrationPhase.LOOK_LEFT)
+    service.validate_pose_phase(CalibrationPhase.LOOK_RIGHT, CalibrationPhase.LOOK_LEFT)
+    service.validate_blink_phase(2)
+    with pytest.raises(CalibrationError, match="closed-eye samples"):
+        service.validate_closed_phase()

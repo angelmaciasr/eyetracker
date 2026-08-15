@@ -13,11 +13,11 @@ from .services.calibration import CalibrationError
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="eye-sentinel",
-        description="Detector local de cierres oculares prolongados",
+        description="Local prolonged eye-closure detector",
     )
     parser.add_argument("--config", type=Path, default=Path("config/default.toml"))
-    parser.add_argument("--recalibrate", action="store_true", help="Ignora el perfil guardado")
-    parser.add_argument("--camera", type=int, help="Sobrescribe el índice de cámara")
+    parser.add_argument("--recalibrate", action="store_true", help="Ignore the saved profile")
+    parser.add_argument("--camera", type=int, help="Override the camera index")
     return parser.parse_args(argv)
 
 
@@ -25,7 +25,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     config_path = args.config.resolve()
     if not config_path.exists():
-        print(f"No existe el archivo de configuración: {config_path}", file=sys.stderr)
+        print(f"Configuration file not found: {config_path}", file=sys.stderr)
         return 2
     config = load_config(config_path)
     if args.camera is not None:
@@ -40,11 +40,11 @@ def main(argv: list[str] | None = None) -> int:
         profile = None if args.recalibrate else app.repository.load()
         if profile is not None:
             app.calibrator.load_profile(profile)
-            print("Calibración guardada cargada. Pulsa R para repetirla.")
+            print("Saved calibration loaded. Press R to run it again.")
         else:
             print(
-                "Iniciando calibración: frontal, abajo, arriba, izquierda, derecha, "
-                "5 parpadeos y cierre mantenido."
+                "Starting calibration: front, down, up, left, right, "
+                "5 blinks, and sustained eye closure."
             )
             profile = app.calibration_controller.run()
         app.monitoring_controller.detector.apply_calibration(profile)
@@ -56,11 +56,11 @@ def main(argv: list[str] | None = None) -> int:
                 profile = app.calibration_controller.run()
                 app.monitoring_controller.detector.apply_calibration(profile)
             except CalibrationError as error:
-                print(f"Calibración no válida: {error}. Inténtalo de nuevo.")
+                print(f"Calibration failed: {error}. Try again.")
     except UserQuit:
         pass
     except CalibrationError as error:
-        print(f"Calibración no válida: {error}", file=sys.stderr)
+        print(f"Calibration failed: {error}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:
         pass

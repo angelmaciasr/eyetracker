@@ -9,9 +9,9 @@ from ..domain import FaceObservation, Point2D, RawEyeMeasurement, TrackingStatus
 
 
 def eye_aspect_ratio(points: tuple[Point2D, ...]) -> float:
-    """Calcula EAR con seis puntos ordenados: esquinas, dos pares verticales."""
+    """Calculate EAR from six ordered points: corners and two vertical pairs."""
     if len(points) != 6:
-        raise ValueError("EAR necesita exactamente seis puntos")
+        raise ValueError("EAR requires exactly six points")
     p1, p2, p3, p4, p5, p6 = points
 
     def distance(a: Point2D, b: Point2D) -> float:

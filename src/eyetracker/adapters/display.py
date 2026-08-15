@@ -40,10 +40,11 @@ class OpenCVDisplay:
             self._history.append(relative.combined_openness)
         color = self._state_color(assessment.state)
         cv2.rectangle(canvas, (0, 0), (frame.width, 122), (18, 18, 18), -1)
-        self._text(canvas, f"Estado: {assessment.state.value.upper()}", 14, 28, color, 0.72)
+        state_label = assessment.state.value.replace("_", " ").upper()
+        self._text(canvas, f"State: {state_label}", 14, 28, color, 0.72)
         self._text(canvas, f"FPS: {self._fps:4.1f}", 14, 55)
         if raw is not None:
-            self._text(canvas, f"EAR I/D: {raw.left_ear:.3f} / {raw.right_ear:.3f}", 150, 55)
+            self._text(canvas, f"EAR L/R: {raw.left_ear:.3f} / {raw.right_ear:.3f}", 150, 55)
         if face.head_pose is not None:
             pose = face.head_pose
             self._text(
@@ -53,18 +54,18 @@ class OpenCVDisplay:
                 55,
             )
         if relative is not None:
-            self._text(canvas, f"Apertura: {relative.combined_openness:.2f}", 14, 82)
-        self._text(canvas, f"Cierre: {assessment.current_closure_seconds:.2f} s", 210, 82)
-        self._text(canvas, f"Parpadeos: {assessment.blink_count}", 14, 109)
-        self._text(canvas, "Q salir   R recalibrar   M silenciar", 210, 109, (190, 190, 190))
+            self._text(canvas, f"Openness: {relative.combined_openness:.2f}", 14, 82)
+        self._text(canvas, f"Closure: {assessment.current_closure_seconds:.2f} s", 210, 82)
+        self._text(canvas, f"Blinks: {assessment.blink_count}", 14, 109)
+        self._text(canvas, "Q quit   R recalibrate   M mute", 210, 109, (190, 190, 190))
         self._draw_graph(canvas, y_top=max(135, frame.height - 145), width=360, height=115)
         if assessment.state is DrowsinessState.ALERT:
             cv2.rectangle(canvas, (3, 3), (frame.width - 4, frame.height - 4), color, 8)
-            self._center_text(canvas, "ALERTA: ABRE LOS OJOS", frame.height // 2, color, 1.15)
+            self._center_text(canvas, "ALERT: OPEN YOUR EYES", frame.height // 2, color, 1.15)
         elif relative is not None and not relative.pose_valid:
             self._center_text(
                 canvas,
-                "ÁNGULO TODAVÍA NO CALIBRADO",
+                "ANGLE NOT COVERED BY CALIBRATION",
                 frame.height // 2,
                 (80, 210, 250),
                 0.9,
@@ -84,18 +85,24 @@ class OpenCVDisplay:
         canvas = frame.image.copy()
         self._draw_eyes(canvas, face)
         overlay = canvas.copy()
-        cv2.rectangle(overlay, (0, 0), (frame.width, 112), (0, 0, 0), -1)
+        cv2.rectangle(overlay, (0, 0), (frame.width, 182), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.78, canvas, 0.22, 0, canvas)
-        self._center_text(canvas, "CALIBRACIÓN", 32, (90, 220, 255), 0.75)
-        self._center_text(canvas, message, 66, (245, 245, 245), 0.75)
+        self._center_text(canvas, "CALIBRATION", 28, (90, 220, 255), 0.7)
+        self._center_multiline(
+            canvas,
+            message,
+            58,
+            (245, 245, 245),
+            0.56,
+            max_width=frame.width - 60,
+            line_height=25,
+        )
         left, right = 80, frame.width - 80
-        cv2.rectangle(canvas, (left, 84), (right, 101), (80, 80, 80), 1)
+        cv2.rectangle(canvas, (left, 158), (right, 175), (80, 80, 80), 1)
         fill = left + int((right - left) * min(1.0, max(0.0, progress)))
-        cv2.rectangle(canvas, (left + 1, 85), (fill, 100), (70, 190, 120), -1)
+        cv2.rectangle(canvas, (left + 1, 159), (fill, 174), (70, 190, 120), -1)
         if face.status is not TrackingStatus.VALID:
-            self._center_text(
-                canvas, "No se detecta una cara", frame.height - 40, (60, 80, 255), 0.72
-            )
+            self._center_text(canvas, "No face detected", frame.height - 40, (60, 80, 255), 0.72)
         elif raw is not None:
             pose_text = ""
             if face.head_pose is not None:
@@ -190,3 +197,35 @@ class OpenCVDisplay:
         size, _ = cv2.getTextSize(value, cv2.FONT_HERSHEY_SIMPLEX, scale, 2)
         x = max(8, (canvas.shape[1] - size[0]) // 2)
         cv2.putText(canvas, value, (x, y), cv2.FONT_HERSHEY_SIMPLEX, scale, color, 2, cv2.LINE_AA)
+
+    @staticmethod
+    def _center_multiline(
+        canvas,
+        value: str,
+        start_y: int,
+        color,
+        scale: float,
+        max_width: int,
+        line_height: int,
+    ) -> None:
+        import cv2
+
+        lines: list[str] = []
+        current = ""
+        for word in value.split():
+            candidate = f"{current} {word}".strip()
+            width = cv2.getTextSize(candidate, cv2.FONT_HERSHEY_SIMPLEX, scale, 1)[0][0]
+            if current and width > max_width:
+                lines.append(current)
+                current = word
+            else:
+                current = candidate
+        if current:
+            lines.append(current)
+        for index, line in enumerate(lines):
+            size, _ = cv2.getTextSize(line, cv2.FONT_HERSHEY_SIMPLEX, scale, 1)
+            x = max(8, (canvas.shape[1] - size[0]) // 2)
+            y = start_y + index * line_height
+            cv2.putText(
+                canvas, line, (x, y), cv2.FONT_HERSHEY_SIMPLEX, scale, color, 1, cv2.LINE_AA
+            )

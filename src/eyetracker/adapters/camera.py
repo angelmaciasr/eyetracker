@@ -22,14 +22,14 @@ class OpenCVCamera:
         if not capture.isOpened():
             capture.release()
             raise RuntimeError(
-                f"No se pudo abrir la cámara {self.config.device_index}. "
-                "Comprueba los permisos de cámara del terminal."
+                f"Could not open camera {self.config.device_index}. "
+                "Check camera permissions for your terminal."
             )
         self._capture = capture
 
     def read(self) -> VideoFrame | None:
         if self._capture is None:
-            raise RuntimeError("La cámara no está iniciada")
+            raise RuntimeError("The camera has not been started")
         ok, image = self._capture.read()
         if not ok:
             return None

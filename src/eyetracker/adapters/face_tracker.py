@@ -6,8 +6,8 @@ from ..config import TrackerConfig
 from ..domain import FaceObservation, Point2D, TrackingStatus, VideoFrame
 from ..services.head_pose import head_pose_from_transform
 
-# Los seis puntos conservan el orden requerido por EAR. "Left" y "right" se
-# refieren a los ojos de la persona observada, no al lado de la imagen.
+# The six points preserve the order required by EAR. "Left" and "right" refer
+# to the observed person's eyes, not to the side of the image.
 LEFT_EYE_INDICES = (362, 385, 387, 263, 373, 380)
 RIGHT_EYE_INDICES = (33, 160, 158, 133, 153, 144)
 
@@ -35,7 +35,7 @@ class MediaPipeFaceTracker:
 
     def track(self, frame: VideoFrame) -> FaceObservation:
         if self._landmarker is None:
-            raise RuntimeError("El tracker no está inicializado")
+            raise RuntimeError("The face tracker has not been initialized")
         import cv2
         import mediapipe as mp
 

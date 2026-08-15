@@ -1,81 +1,90 @@
 # Eye Sentinel
 
-MVP en Python que usa la webcam para medir la apertura relativa de ambos ojos, diferencia
-parpadeos naturales de cierres prolongados y activa una alarma local. El vídeo no se guarda
-ni se envía a ningún servidor.
+Python MVP that uses a webcam to measure the relative openness of both eyes, distinguish natural
+blinks from prolonged closures, and trigger a local alarm. Video is never stored or sent to a
+server.
 
-> **Aviso:** es un proyecto experimental, no un dispositivo médico ni un sistema de seguridad
-> certificado. No debe utilizarse como única protección al conducir o manejar maquinaria.
+> **Warning:** this is an experimental project, not a medical device or certified safety system.
+> Do not use it as your only protection while driving or operating machinery.
 
-## Qué incluye el MVP
+## MVP features
 
-- Una cara y una webcam local.
-- MediaPipe Face Landmarker para localizar seis puntos de cada ojo.
-- EAR (Eye Aspect Ratio) filtrado con una mediana corta.
-- Calibración personal: frontal, abajo/arriba, izquierda/derecha, parpadeos y cierre.
-- Apertura relativa independiente para cada ojo.
-- Estimación de orientación `pitch`, `yaw` y `roll`, calibrada respecto a la postura neutral.
-- Corrección del EAR por los ángulos vertical y horizontal aprendidos para cada persona.
-- Máquina temporal con histéresis: despierto, parpadeo, cierre, alerta y tracking perdido.
-- Alarma repetida cuando la apertura relativa permanece por debajo de `0.75` durante 1 s.
-- Vista de depuración con landmarks, EAR, apertura, duración, FPS, contador y gráfica.
-- Perfil de calibración persistente en `data/calibration.json`.
-- Pruebas unitarias de la geometría, calibración y lógica temporal.
+- One person and one local webcam.
+- MediaPipe Face Landmarker to locate six points around each eye.
+- Eye Aspect Ratio (EAR) filtered with a short median window.
+- Guided seven-step calibration: front, down, up, left, right, blinks, and closed eyes.
+- Independent relative openness and head-pose correction for each eye.
+- `pitch`, `yaw`, and `roll` estimation relative to the calibrated neutral pose.
+- Time-based state machine with hysteresis: awake, blinking, closed, alert, and tracking lost.
+- Repeating alarm when relative openness remains below `0.75` for one second.
+- Debug view with landmarks, EAR, openness, closure duration, FPS, blink count, and chart.
+- Persistent calibration profile in `data/calibration.json`.
+- Automated tests for geometry, calibration, head pose, display, and temporal logic.
 
-PERCLOS, dirección de mirada, varias caras y reconocimiento de identidad quedan
-deliberadamente fuera de este MVP.
+PERCLOS, gaze direction, multiple faces, and identity recognition are intentionally outside the
+MVP scope.
 
-## Requisitos
+## Requirements
 
-- Python 3.11 o 3.12. MediaPipe todavía no publica wheel para Python 3.14.
-- macOS, Linux o Windows con una webcam accesible.
-- Acceso a Internet la primera vez para descargar el modelo oficial de MediaPipe (~30 MB).
+- Python 3.11 or 3.12. MediaPipe does not currently provide a Python 3.14 wheel.
+- macOS, Linux, or Windows with an accessible webcam.
+- Internet access on first launch to download the official MediaPipe model.
 
-En este equipo ya existe `uv` y Python 3.11, por lo que la ruta recomendada es:
+Recommended setup with `uv`:
 
 ```bash
 uv sync --extra dev
 uv run eye-sentinel
 ```
 
-La primera ejecución descargará `models/face_landmarker.task`. macOS puede pedir permiso de
-cámara para Terminal/T3 Code; hay que aceptarlo.
+The first launch downloads `models/face_landmarker.task`. macOS may ask for camera permission for
+Terminal or T3 Code. If access was previously blocked, enable it in **System Settings → Privacy &
+Security → Camera**, then restart the application you use to run the command.
 
-Si macOS la bloqueó previamente, actívala en **Ajustes del Sistema → Privacidad y seguridad →
-Cámara** para la aplicación desde la que ejecutas el comando y vuelve a abrirla.
-
-## Uso
+## Usage
 
 ```bash
-# Arranque normal; reutiliza una calibración guardada
+# Normal launch; reuse the saved calibration
 uv run eye-sentinel
 
-# Forzar una calibración nueva
+# Force a new calibration
 uv run eye-sentinel --recalibrate
 
-# Elegir otra cámara
+# Select a different camera
 uv run eye-sentinel --camera 1
 
-# Usar otro archivo de configuración
+# Use a different configuration file
 uv run eye-sentinel --config config/default.toml
 ```
 
-Controles dentro de la ventana:
+Window controls:
 
-- `Q` o `Esc`: salir.
-- `R`: recalibrar.
-- `M`: silenciar o reactivar la alarma durante la sesión.
+- `Q` or `Esc`: quit.
+- `R`: recalibrate.
+- `M`: mute or unmute the alarm for the current session.
+- `Space`: start the displayed calibration step.
 
-Durante la calibración, cada fase espera a que estés preparado y pulses `Espacio`. Sigue las
-instrucciones para mirar de frente, abajo, arriba, a la izquierda y a la derecha sin cerrar ni
-entornar los ojos. Una confirmación sonora indica que cada fase ha terminado. Mantén una
-distancia estable y usa luz uniforme. Si una postura o las referencias abierta/cerrada no se
-distinguen suficientemente, la calibración muestra el error y permite reiniciarla con `Espacio`
-sin cerrar la aplicación.
+## Calibration
 
-## Configuración
+Calibration contains seven guided steps:
 
-Todos los umbrales están en [`config/default.toml`](config/default.toml). Los más relevantes:
+1. Keep your eyes naturally open and look straight ahead.
+2. Keep your eyes open and tilt your head down.
+3. Keep your eyes open and tilt your head up.
+4. Keep your eyes open and turn your head left.
+5. Keep your eyes open and turn your head right.
+6. Look straight ahead and blink naturally five times.
+7. Close both eyes and keep them closed.
+
+Before every step, the application explains what to do and waits for `Space`. A confirmation sound
+marks the end of each step. Keep a stable distance and use even lighting. If the poses or open/closed
+references are not distinct enough, the application explains the failure and lets you press `Space`
+to restart without closing the program.
+
+## Configuration
+
+All thresholds are stored in [`config/default.toml`](config/default.toml). The main detector values
+are:
 
 ```toml
 [detector]
@@ -86,11 +95,11 @@ maximum_blink_seconds = 0.40
 alert_after_closed_seconds = 1.00
 ```
 
-Los umbrales `closed_threshold` y `reopened_threshold` se aplican a la apertura relativa ya
-calibrada, no al EAR bruto. La diferencia entre ambos crea histéresis y evita oscilaciones.
+The closed and reopened thresholds apply to calibrated relative openness, not raw EAR. Their
+difference provides hysteresis and prevents state oscillation.
 
-La calibración aprende los extremos verticales y horizontales. La apertura esperada de cada ojo
-se interpola por separado, ya que al girar la cabeza un ojo puede deformarse más que el otro:
+Calibration learns vertical and horizontal extremes. Expected openness is interpolated separately
+for each eye because turning the head can deform one eye more than the other:
 
 ```toml
 [head_pose]
@@ -101,31 +110,29 @@ minimum_calibration_pitch_span = 12.0
 minimum_calibration_yaw_span = 15.0
 ```
 
-La aplicación acepta los intervalos que tú hayas recorrido, más cinco grados de margen en cada
-eje. Solo fuera de esos intervalos muestra `ÁNGULO TODAVÍA NO CALIBRADO`, reinicia cualquier
-cierre en curso y evita la alarma. Es necesario recalibrar tras actualizar desde una versión
-anterior.
+The application accepts the measured ranges plus a five-degree margin on each axis. Beyond those
+ranges it displays `ANGLE NOT COVERED BY CALIBRATION`, resets any active closure, and prevents an
+alarm. Recalibration is required after upgrading from an older profile format.
 
-## Desarrollo y pruebas
+## Development and tests
 
 ```bash
 uv run pytest
 uv run ruff check .
 ```
 
-La lógica central vive en `src/eyetracker/services/` y no importa OpenCV ni MediaPipe. Los
-adaptadores de cámara, tracking, sonido, pantalla y persistencia están en
-`src/eyetracker/adapters/`.
+Core logic in `src/eyetracker/services/` does not import OpenCV or MediaPipe. Camera, tracking,
+sound, display, and persistence implementations live in `src/eyetracker/adapters/`.
 
-## Estructura
+## Structure
 
 ```text
 src/eyetracker/
-├── application.py          # Orquestación de calibración y monitorización
-├── bootstrap.py            # Conecta las implementaciones
-├── config.py               # Configuración tipada
-├── domain.py               # Modelos y estados comunes
-├── ports.py                # Contratos de infraestructura
-├── adapters/               # OpenCV, MediaPipe, sonido y JSON
-└── services/               # EAR, calibración y detector temporal
+├── application.py          # Calibration and monitoring orchestration
+├── bootstrap.py            # Connects concrete implementations
+├── config.py               # Typed configuration
+├── domain.py               # Shared models and states
+├── ports.py                # Infrastructure contracts
+├── adapters/               # OpenCV, MediaPipe, sound, and JSON
+└── services/               # EAR, calibration, head pose, and temporal detector
 ```

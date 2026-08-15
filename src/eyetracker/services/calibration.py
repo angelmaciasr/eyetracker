@@ -60,32 +60,116 @@ class PersonalCalibrationService:
     def clear_closed_samples(self) -> None:
         self._closed.clear()
 
+    def clear_phase(self, phase: CalibrationPhase) -> None:
+        if phase is CalibrationPhase.OPEN:
+            self._open.clear()
+        elif phase in self._pose_open:
+            self._pose_open[phase].clear()
+        elif phase is CalibrationPhase.BLINKING:
+            self._blink_samples.clear()
+            self._blink_durations.clear()
+            self._blink_minima.clear()
+        elif phase is CalibrationPhase.CLOSED:
+            self._closed.clear()
+
     def provisional_open_ear(self) -> tuple[float, float]:
         if len(self._open) < self.config.minimum_samples:
-            raise CalibrationError("No hay suficientes muestras con ojos abiertos")
+            raise CalibrationError("Not enough open-eye samples")
+        pose_samples = sum(sample.head_pose is not None for sample in self._open)
+        if pose_samples < self.config.minimum_samples:
+            raise CalibrationError("Head pose was not detected reliably")
         return (
             statistics.median(sample.left_ear for sample in self._open),
             statistics.median(sample.right_ear for sample in self._open),
         )
 
+    def validate_pose_phase(
+        self,
+        phase: CalibrationPhase,
+        counterpart: CalibrationPhase | None = None,
+    ) -> None:
+        mapping = {
+            CalibrationPhase.LOOK_DOWN: (
+                "pitch",
+                self.head_pose_config.minimum_calibration_pitch_span,
+                "up and down",
+            ),
+            CalibrationPhase.LOOK_UP: (
+                "pitch",
+                self.head_pose_config.minimum_calibration_pitch_span,
+                "up and down",
+            ),
+            CalibrationPhase.LOOK_LEFT: (
+                "yaw",
+                self.head_pose_config.minimum_calibration_yaw_span,
+                "left and right",
+            ),
+            CalibrationPhase.LOOK_RIGHT: (
+                "yaw",
+                self.head_pose_config.minimum_calibration_yaw_span,
+                "left and right",
+            ),
+        }
+        if phase not in mapping:
+            raise ValueError(f"{phase.value} is not a head-pose phase")
+        samples = [sample for sample in self._pose_open[phase] if sample.head_pose is not None]
+        if len(samples) < self.config.minimum_samples:
+            raise CalibrationError("Not enough reliable head-pose samples")
+        axis, minimum_span, instruction = mapping[phase]
+        neutral_poses = [sample.head_pose for sample in self._open if sample.head_pose is not None]
+        if not neutral_poses:
+            raise CalibrationError("The neutral head pose is missing")
+        neutral = statistics.median(getattr(pose, axis) for pose in neutral_poses)
+        angle = statistics.median(
+            getattr(sample.head_pose, axis) for sample in samples if sample.head_pose
+        )
+        if abs(signed_angular_delta(angle, neutral)) < max(3.0, minimum_span / 2.0):
+            raise CalibrationError(f"Move your head farther {instruction}")
+        if counterpart is not None:
+            left_open, right_open = self.provisional_open_ear()
+            self._axis_anchors(
+                (counterpart, phase),
+                axis,
+                neutral,
+                minimum_span,
+                instruction,
+                left_open,
+                right_open,
+            )
+
+    def validate_blink_phase(self, required_blinks: int) -> None:
+        if len(self._blink_durations) < required_blinks:
+            raise CalibrationError(
+                f"Only {len(self._blink_durations)}/{required_blinks} blinks were detected"
+            )
+
+    def validate_closed_phase(self) -> None:
+        left_open, right_open = self.provisional_open_ear()
+        if len(self._closed) < self.config.minimum_samples:
+            raise CalibrationError("Not enough reliable closed-eye samples")
+        left_closed = statistics.median(sample.left_ear for sample in self._closed)
+        right_closed = statistics.median(sample.right_ear for sample in self._closed)
+        if left_open - left_closed < 0.025 or right_open - right_closed < 0.025:
+            raise CalibrationError("Open and closed eye references are too similar")
+        if left_closed >= left_open * 0.82 or right_closed >= right_open * 0.82:
+            raise CalibrationError("The closed-eye reference is invalid")
+
     def finish(self) -> CalibrationProfile:
         if len(self._open) < self.config.minimum_samples:
-            raise CalibrationError("Faltan muestras fiables con los ojos abiertos")
+            raise CalibrationError("Not enough reliable open-eye samples")
         if len(self._closed) < self.config.minimum_samples:
-            raise CalibrationError("Faltan muestras fiables con los ojos cerrados")
+            raise CalibrationError("Not enough reliable closed-eye samples")
         if not self._blink_durations:
-            raise CalibrationError("No se ha detectado ningún parpadeo")
+            raise CalibrationError("No blinks were detected")
 
         left_open = statistics.median(s.left_ear for s in self._open)
         right_open = statistics.median(s.right_ear for s in self._open)
         left_closed = statistics.median(s.left_ear for s in self._closed)
         right_closed = statistics.median(s.right_ear for s in self._closed)
         if left_open - left_closed < 0.025 or right_open - right_closed < 0.025:
-            raise CalibrationError(
-                "La apertura y el cierre no se distinguen; repite la calibración"
-            )
+            raise CalibrationError("Open and closed eye references are too similar")
         if left_closed >= left_open * 0.82 or right_closed >= right_open * 0.82:
-            raise CalibrationError("La referencia de ojos cerrados no es válida")
+            raise CalibrationError("The closed-eye reference is invalid")
 
         typical = statistics.median(self._blink_durations)
         max_normal = min(max(typical * 2.0, 0.25), 0.60)
@@ -106,7 +190,7 @@ class PersonalCalibrationService:
             "pitch",
             neutral_pitch,
             self.head_pose_config.minimum_calibration_pitch_span,
-            "arriba y abajo",
+            "up and down",
             left_open,
             right_open,
         )
@@ -115,7 +199,7 @@ class PersonalCalibrationService:
             "yaw",
             neutral_yaw,
             self.head_pose_config.minimum_calibration_yaw_span,
-            "a izquierda y derecha",
+            "left and right",
             left_open,
             right_open,
         )
@@ -174,11 +258,11 @@ class PersonalCalibrationService:
         if not anchors:
             return (-20.0, left_open, right_open), (20.0, left_open, right_open)
         if len(anchors) != 2:
-            raise CalibrationError(f"Falta una orientación: mira {instruction}")
+            raise CalibrationError(f"A head-pose sample is missing: look {instruction}")
         anchors.sort(key=lambda anchor: anchor[0])
         lower, upper = anchors
         if upper[0] - lower[0] < minimum_span or lower[0] >= -3.0 or upper[0] <= 3.0:
-            raise CalibrationError(f"Mueve más la cabeza {instruction} durante la calibración")
+            raise CalibrationError(f"Move your head farther {instruction} during calibration")
         return lower, upper
 
     def load_profile(self, profile: CalibrationProfile) -> None:
@@ -189,7 +273,7 @@ class PersonalCalibrationService:
 
     def normalize(self, sample: RawEyeMeasurement) -> RelativeEyeMeasurement:
         if self.profile is None:
-            raise CalibrationError("El sistema todavía no está calibrado")
+            raise CalibrationError("The system has not been calibrated yet")
 
         def relative(value: float, closed: float, opened: float) -> float:
             normalized = (value - closed) / (opened - closed)
