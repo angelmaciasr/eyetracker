@@ -1,7 +1,12 @@
 import pytest
 
 from eyetracker.config import DetectorConfig
-from eyetracker.domain import DrowsinessState, RelativeEyeMeasurement
+from eyetracker.domain import (
+    AlarmSeverity,
+    DrowsinessLevel,
+    DrowsinessState,
+    RelativeEyeMeasurement,
+)
 from eyetracker.services.detector import TemporalDrowsinessDetector
 
 
@@ -115,3 +120,80 @@ def test_head_tilt_thresholds_must_have_valid_hysteresis():
         TemporalDrowsinessDetector(
             DetectorConfig(head_tilt_threshold=20.0, head_tilt_recovered_threshold=20.0)
         )
+
+
+def test_perclos_excludes_a_normal_blink():
+    detector = TemporalDrowsinessDetector(DetectorConfig())
+    detector.update(measurement(0.0, 1.0))
+    detector.update(measurement(0.1, 0.0))
+    assessment = detector.update(measurement(0.3, 1.0))
+    assert assessment.blink_count == 1
+    assert assessment.perclos_60_seconds == 0.0
+    assert assessment.slow_blinks_last_minute == 0
+
+
+def test_perclos_raises_drowsy_warning_after_enough_valid_observation():
+    detector = TemporalDrowsinessDetector(
+        DetectorConfig(
+            perclos_minimum_observation_seconds=0.5,
+            perclos_drowsy_threshold=0.20,
+            alert_after_closed_seconds=2.0,
+            maximum_sample_gap_seconds=1.0,
+        )
+    )
+    detector.update(measurement(0.0, 1.0))
+    detector.update(measurement(0.1, 0.0))
+    assessment = detector.update(measurement(0.7, 0.0))
+    assert assessment.perclos_60_seconds > 0.20
+    assert assessment.level is DrowsinessLevel.DROWSY
+    assert assessment.alarm_severity is AlarmSeverity.WARNING
+    assert assessment.should_alert
+
+
+def test_perclos_removes_closed_time_outside_window():
+    detector = TemporalDrowsinessDetector(
+        DetectorConfig(
+            perclos_short_window_seconds=1.0,
+            perclos_window_seconds=1.0,
+            recent_closure_window_seconds=1.0,
+            alert_after_closed_seconds=2.0,
+        )
+    )
+    detector.update(measurement(0.0, 1.0))
+    detector.update(measurement(0.1, 0.0))
+    detector.update(measurement(0.7, 0.0))
+    detector.update(measurement(0.8, 1.0))
+    detector.update(measurement(1.2, 1.0))
+    assessment = detector.update(measurement(1.8, 1.0))
+    assert assessment.perclos_60_seconds == pytest.approx(0.0)
+
+
+def test_tracking_loss_is_confirmed_only_after_configured_duration():
+    detector = TemporalDrowsinessDetector(DetectorConfig(tracking_lost_seconds=2.0))
+    first = detector.tracking_lost(10.0)
+    confirmed = detector.tracking_lost(12.1)
+    assert first.level is DrowsinessLevel.NORMAL
+    assert confirmed.level is DrowsinessLevel.TRACKING_LOST
+    assert confirmed.current_tracking_lost_seconds == pytest.approx(2.1)
+    assert confirmed.confidence == 0.0
+
+
+def test_perclos_is_time_based_and_independent_of_frame_rate():
+    config = DetectorConfig(
+        alert_after_closed_seconds=5.0,
+        maximum_sample_gap_seconds=0.2,
+        perclos_minimum_observation_seconds=10.0,
+    )
+
+    def run(step):
+        detector = TemporalDrowsinessDetector(config)
+        timestamp = 0.0
+        assessment = None
+        while timestamp <= 2.0 + 1e-9:
+            openness = 0.0 if 0.5 <= timestamp < 1.2 else 1.0
+            assessment = detector.update(measurement(timestamp, openness))
+            timestamp += step
+        assert assessment is not None
+        return assessment.perclos_60_seconds
+
+    assert run(0.1) == pytest.approx(run(0.05), abs=0.03)

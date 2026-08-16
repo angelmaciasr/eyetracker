@@ -5,4 +5,9 @@ __pycache__/
 .coverage
 models/*.task
 data/calibration.json
+data/events.jsonl
+recordings/
+build/
+dist/
+*.spec.bak
 .DS_Store

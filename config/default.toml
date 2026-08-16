@@ -45,9 +45,24 @@ head_tilt_recovered_threshold = 18.0
 head_side_tilt_threshold = 15.0
 head_side_tilt_recovered_threshold = 10.0
 head_tilt_alert_seconds = 0.75
+perclos_closed_threshold = 0.20
+perclos_short_window_seconds = 30.0
+perclos_window_seconds = 60.0
+perclos_drowsy_threshold = 0.20
+perclos_minimum_observation_seconds = 10.0
+slow_blink_seconds = 0.40
+possible_drowsiness_slow_blinks = 3
+recent_closure_window_seconds = 60.0
+maximum_sample_gap_seconds = 0.50
+tracking_lost_seconds = 2.0
 
 [alarm]
 repeat_seconds = 0.9
+warning_cooldown_seconds = 5.0
+
+[logging]
+enabled = true
+events_path = "data/events.jsonl"
 
 [storage]
 calibration_path = "data/calibration.json"

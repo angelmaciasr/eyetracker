@@ -5,6 +5,7 @@ from itertools import pairwise
 
 from ..domain import (
     DrowsinessAssessment,
+    DrowsinessLevel,
     DrowsinessState,
     FaceObservation,
     RawEyeMeasurement,
@@ -38,10 +39,12 @@ class OpenCVDisplay:
         self._draw_eyes(canvas, face)
         if relative is not None:
             self._history.append(relative.combined_openness)
-        color = self._state_color(assessment.state)
-        cv2.rectangle(canvas, (0, 0), (frame.width, 122), (18, 18, 18), -1)
+        color = self._assessment_color(assessment)
+        cv2.rectangle(canvas, (0, 0), (frame.width, 150), (18, 18, 18), -1)
         state_label = assessment.state.value.replace("_", " ").upper()
         self._text(canvas, f"State: {state_label}", 14, 28, color, 0.72)
+        level_label = assessment.level.value.replace("_", " ").upper()
+        self._text(canvas, f"Drowsiness: {level_label}", 300, 28, color, 0.66)
         self._text(canvas, f"FPS: {self._fps:4.1f}", 14, 55)
         if raw is not None:
             self._text(canvas, f"EAR L/R: {raw.left_ear:.3f} / {raw.right_ear:.3f}", 150, 55)
@@ -67,8 +70,30 @@ class OpenCVDisplay:
                 82,
             )
         self._text(canvas, f"Blinks: {assessment.blink_count}", 14, 109)
-        self._text(canvas, "Q quit   R recalibrate   M mute", 210, 109, (190, 190, 190))
-        self._draw_graph(canvas, y_top=max(135, frame.height - 145), width=360, height=115)
+        self._text(
+            canvas,
+            f"PERCLOS 30/60: {assessment.perclos_30_seconds:.0%} / "
+            f"{assessment.perclos_60_seconds:.0%}",
+            135,
+            109,
+        )
+        self._text(
+            canvas,
+            f"Slow closures: {assessment.slow_blinks_last_minute}   "
+            f"Confidence: {assessment.confidence:.0%}",
+            430,
+            109,
+        )
+        self._text(canvas, "Q quit   R recalibrate   M mute", 14, 138, (190, 190, 190))
+        if assessment.current_tracking_lost_seconds > 0.0:
+            self._text(
+                canvas,
+                f"Tracking lost: {assessment.current_tracking_lost_seconds:.1f} s",
+                430,
+                138,
+                (160, 160, 160),
+            )
+        self._draw_graph(canvas, y_top=max(162, frame.height - 145), width=360, height=115)
         if assessment.state in (
             DrowsinessState.ALERT,
             DrowsinessState.HEAD_TILT_ALERT,
@@ -82,6 +107,17 @@ class OpenCVDisplay:
             else:
                 message = "ALERT: OPEN YOUR EYES"
             self._center_text(canvas, message, frame.height // 2, color, 1.05)
+        elif assessment.level in (
+            DrowsinessLevel.POSSIBLE_DROWSINESS,
+            DrowsinessLevel.DROWSY,
+        ):
+            self._center_text(
+                canvas,
+                "DROWSINESS WARNING",
+                frame.height // 2,
+                color,
+                1.0,
+            )
         elif relative is not None and not relative.pose_valid:
             self._center_text(
                 canvas,
@@ -206,6 +242,16 @@ class OpenCVDisplay:
             DrowsinessState.CALIBRATION_RANGE_ALERT: (40, 40, 255),
             DrowsinessState.TRACKING_LOST: (160, 160, 160),
         }[state]
+
+    @classmethod
+    def _assessment_color(cls, assessment: DrowsinessAssessment) -> tuple[int, int, int]:
+        if assessment.level is DrowsinessLevel.IMMEDIATE_ALERT:
+            return (40, 40, 255)
+        if assessment.level is DrowsinessLevel.DROWSY:
+            return (20, 120, 255)
+        if assessment.level is DrowsinessLevel.POSSIBLE_DROWSINESS:
+            return (40, 190, 255)
+        return cls._state_color(assessment.state)
 
     @staticmethod
     def _text(canvas, value: str, x: int, y: int, color=(235, 235, 235), scale=0.58) -> None:

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .adapters.alarm import SoundAlarm
 from .adapters.repository import JsonCalibrationRepository
 from .config import CalibrationConfig
 from .domain import CalibrationPhase, CalibrationProfile, TrackingStatus
-from .ports import CameraPort, DisplayPort, FaceTrackerPort
+from .ports import AlarmPort, CameraPort, DisplayPort, EventLoggerPort, FaceTrackerPort
+from .services.alert_manager import AlertManager
 from .services.calibration import CalibrationError, PersonalCalibrationService
 from .services.detector import TemporalDrowsinessDetector
 from .services.eye_measurement import EAREyeMeasurementService
@@ -22,7 +22,7 @@ class CalibrationController:
     tracker: FaceTrackerPort
     measurement: EAREyeMeasurementService
     calibrator: PersonalCalibrationService
-    alarm: SoundAlarm
+    alarm: AlarmPort
     display: DisplayPort
     repository: JsonCalibrationRepository
     config: CalibrationConfig
@@ -307,39 +307,45 @@ class MonitoringController:
     measurement: EAREyeMeasurementService
     calibrator: PersonalCalibrationService
     detector: TemporalDrowsinessDetector
-    alarm: SoundAlarm
+    alert_manager: AlertManager
     display: DisplayPort
+    event_logger: EventLoggerPort
 
     def run(self) -> str:
         muted = False
         self.measurement.reset()
         self.detector.reset()
-        while True:
-            frame = self.camera.read()
-            if frame is None:
-                continue
-            face = self.tracker.track(frame)
-            raw = None
-            relative = None
-            if face.status is TrackingStatus.VALID:
-                raw = self.measurement.measure(face)
-            if raw is not None and raw.reliable:
-                relative = self.calibrator.normalize(raw)
-                assessment = self.detector.update(relative)
-            else:
-                assessment = self.detector.tracking_lost(frame.timestamp)
-            if assessment.should_alert and not muted:
-                self.alarm.activate(assessment.reason or "eyes_closed")
-            else:
-                self.alarm.deactivate()
-            self.display.render_monitoring(frame, face, raw, relative, assessment)
-            key = self.display.poll_key()
-            if key == "quit":
-                return "quit"
-            if key == "recalibrate":
-                self.alarm.deactivate()
-                return "recalibrate"
-            if key == "mute":
-                muted = not muted
-                if muted:
-                    self.alarm.deactivate()
+        self.alert_manager.reset()
+        self.event_logger.begin_session()
+        try:
+            while True:
+                frame = self.camera.read()
+                if frame is None:
+                    if self.camera.is_finished():
+                        return "quit"
+                    continue
+                face = self.tracker.track(frame)
+                raw = None
+                relative = None
+                if face.status is TrackingStatus.VALID:
+                    raw = self.measurement.measure(face)
+                if raw is not None and raw.reliable:
+                    relative = self.calibrator.normalize(raw)
+                    assessment = self.detector.update(relative)
+                else:
+                    assessment = self.detector.tracking_lost(frame.timestamp)
+                self.event_logger.record(assessment)
+                self.alert_manager.handle(assessment)
+                self.display.render_monitoring(frame, face, raw, relative, assessment)
+                key = self.display.poll_key()
+                if key == "quit":
+                    return "quit"
+                if key == "recalibrate":
+                    self.alert_manager.reset()
+                    return "recalibrate"
+                if key == "mute":
+                    muted = not muted
+                    self.alert_manager.set_muted(muted)
+        finally:
+            self.alert_manager.reset()
+            self.event_logger.end_session()

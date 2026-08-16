@@ -6,12 +6,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .adapters.alarm import SoundAlarm
-from .adapters.camera import OpenCVCamera
+from .adapters.camera import OpenCVCamera, VideoFileCamera
 from .adapters.display import OpenCVDisplay
+from .adapters.event_logger import JsonlEventLogger
 from .adapters.face_tracker import MediaPipeFaceTracker
 from .adapters.repository import JsonCalibrationRepository
 from .application import CalibrationController, MonitoringController
 from .config import AppConfig
+from .ports import CameraPort
+from .services.alert_manager import AlertManager
 from .services.calibration import PersonalCalibrationService
 from .services.detector import TemporalDrowsinessDetector
 from .services.eye_measurement import EAREyeMeasurementService
@@ -44,7 +47,7 @@ def ensure_model(path: Path) -> None:
 
 @dataclass
 class Application:
-    camera: OpenCVCamera
+    camera: CameraPort
     tracker: MediaPipeFaceTracker
     display: OpenCVDisplay
     alarm: SoundAlarm
@@ -60,14 +63,29 @@ class Application:
         self.display.close()
 
 
-def build_application(config: AppConfig, root: Path) -> Application:
-    model_path = (root / config.tracker.model_path).resolve()
-    calibration_path = (root / config.storage.calibration_path).resolve()
+def build_application(
+    config: AppConfig,
+    root: Path,
+    video_path: Path | None = None,
+    data_root: Path | None = None,
+) -> Application:
+    data_root = data_root or root
+    bundled_model_path = (root / config.tracker.model_path).resolve()
+    writable_model_path = (data_root / config.tracker.model_path).resolve()
+    model_path = bundled_model_path if bundled_model_path.exists() else writable_model_path
+    calibration_path = (data_root / config.storage.calibration_path).resolve()
     ensure_model(model_path)
-    camera = OpenCVCamera(config.camera)
+    events_path = (data_root / config.logging.events_path).resolve()
+    camera: CameraPort = (
+        VideoFileCamera(str(video_path.resolve()))
+        if video_path is not None
+        else OpenCVCamera(config.camera)
+    )
     tracker = MediaPipeFaceTracker(config.tracker, model_path)
     display = OpenCVDisplay(config.detector.closed_threshold)
     alarm = SoundAlarm(config.alarm)
+    alert_manager = AlertManager(alarm, config.alarm)
+    event_logger = JsonlEventLogger(events_path, config.logging.enabled)
     measurement = EAREyeMeasurementService(config.measurement)
     calibrator = PersonalCalibrationService(config.calibration, config.head_pose)
     detector = TemporalDrowsinessDetector(config.detector)
@@ -83,7 +101,14 @@ def build_application(config: AppConfig, root: Path) -> Application:
         config.calibration,
     )
     monitoring_controller = MonitoringController(
-        camera, tracker, measurement, calibrator, detector, alarm, display
+        camera,
+        tracker,
+        measurement,
+        calibrator,
+        detector,
+        alert_manager,
+        display,
+        event_logger,
     )
     return Application(
         camera,

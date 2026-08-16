@@ -64,11 +64,28 @@ class DetectorConfig:
     head_side_tilt_threshold: float = 15.0
     head_side_tilt_recovered_threshold: float = 10.0
     head_tilt_alert_seconds: float = 0.75
+    perclos_closed_threshold: float = 0.20
+    perclos_short_window_seconds: float = 30.0
+    perclos_window_seconds: float = 60.0
+    perclos_drowsy_threshold: float = 0.20
+    perclos_minimum_observation_seconds: float = 10.0
+    slow_blink_seconds: float = 0.40
+    possible_drowsiness_slow_blinks: int = 3
+    recent_closure_window_seconds: float = 60.0
+    maximum_sample_gap_seconds: float = 0.50
+    tracking_lost_seconds: float = 2.0
 
 
 @dataclass(frozen=True)
 class AlarmConfig:
     repeat_seconds: float = 0.9
+    warning_cooldown_seconds: float = 5.0
+
+
+@dataclass(frozen=True)
+class LoggingConfig:
+    enabled: bool = True
+    events_path: str = "data/events.jsonl"
 
 
 @dataclass(frozen=True)
@@ -85,6 +102,7 @@ class AppConfig:
     calibration: CalibrationConfig
     detector: DetectorConfig
     alarm: AlarmConfig
+    logging: LoggingConfig
     storage: StorageConfig
 
 
@@ -103,5 +121,6 @@ def load_config(path: Path) -> AppConfig:
         calibration=_section(data, "calibration", CalibrationConfig),
         detector=_section(data, "detector", DetectorConfig),
         alarm=_section(data, "alarm", AlarmConfig),
+        logging=_section(data, "logging", LoggingConfig),
         storage=_section(data, "storage", StorageConfig),
     )

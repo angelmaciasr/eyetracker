@@ -280,6 +280,7 @@ class PersonalCalibrationService:
             return min(1.2, max(0.0, normalized))
 
         pose_valid = True
+        pose_confidence = 1.0
         pitch_delta: float | None = None
         roll_delta: float | None = None
         left_ear = sample.left_ear
@@ -301,6 +302,22 @@ class PersonalCalibrationService:
                 <= yaw_upper + self.head_pose_config.yaw_range_margin
                 and abs(roll_delta) <= self.head_pose_config.maximum_roll_delta
             )
+            pitch_limit = max(
+                abs(pitch_lower - self.head_pose_config.pitch_range_margin),
+                abs(pitch_upper + self.head_pose_config.pitch_range_margin),
+                1e-6,
+            )
+            yaw_limit = max(
+                abs(yaw_lower - self.head_pose_config.yaw_range_margin),
+                abs(yaw_upper + self.head_pose_config.yaw_range_margin),
+                1e-6,
+            )
+            pose_ratio = max(
+                abs(pitch_delta) / pitch_limit,
+                abs(yaw_delta) / yaw_limit,
+                abs(roll_delta) / max(self.head_pose_config.maximum_roll_delta, 1e-6),
+            )
+            pose_confidence = max(0.0, 1.0 - 0.5 * pose_ratio) if pose_valid else 0.0
             pitch_left = self._expected_open_ear(
                 pitch_delta,
                 self.profile.left_open_ear,
@@ -360,6 +377,7 @@ class PersonalCalibrationService:
             pose_valid=pose_valid,
             pitch_delta=pitch_delta,
             roll_delta=roll_delta,
+            pose_confidence=pose_confidence,
         )
 
     @staticmethod

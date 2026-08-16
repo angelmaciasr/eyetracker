@@ -25,7 +25,16 @@ class SoundAlarm:
 
     def notify(self) -> None:
         """Play a short confirmation without activating the repeating alarm."""
-        threading.Thread(target=self._play_once, name="calibration-chime", daemon=True).start()
+        threading.Thread(
+            target=self._play_once, args=(False,), name="calibration-chime", daemon=True
+        ).start()
+
+    def warn(self, reason: str) -> None:
+        """Play one softer warning; cooldown is managed by the controller."""
+        del reason
+        threading.Thread(
+            target=self._play_once, args=(True,), name="drowsiness-warning", daemon=True
+        ).start()
 
     def is_active(self) -> bool:
         return self._active.is_set()
@@ -39,14 +48,15 @@ class SoundAlarm:
         while not self._closed.is_set():
             if not self._active.wait(timeout=0.1):
                 continue
-            self._play_once()
+            self._play_once(False)
             self._closed.wait(self.config.repeat_seconds)
 
     @staticmethod
-    def _play_once() -> None:
+    def _play_once(warning: bool = False) -> None:
         command: list[str] | None = None
         if sys.platform == "darwin" and shutil.which("afplay"):
-            command = ["afplay", "/System/Library/Sounds/Glass.aiff"]
+            sound = "Pop.aiff" if warning else "Glass.aiff"
+            command = ["afplay", f"/System/Library/Sounds/{sound}"]
         elif shutil.which("paplay"):
             command = ["paplay", "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga"]
         if command:

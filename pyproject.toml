@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "eye-sentinel"
-version = "0.1.0"
-description = "Local MVP for detecting prolonged eye closure"
+version = "0.2.0"
+description = "Local calibrated eye and head-pose drowsiness monitor"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [

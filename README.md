@@ -1,13 +1,12 @@
 # Eye Sentinel
 
-Python MVP that uses a webcam to measure the relative openness of both eyes, distinguish natural
-blinks from prolonged closures, and trigger a local alarm. Video is never stored or sent to a
-server.
+Local Python drowsiness monitor that combines calibrated eye openness, temporal closure metrics,
+PERCLOS, and head orientation. Video is never stored or sent to a server.
 
 > **Warning:** this is an experimental project, not a medical device or certified safety system.
 > Do not use it as your only protection while driving or operating machinery.
 
-## MVP features
+## Features
 
 - One person and one local webcam.
 - MediaPipe Face Landmarker to locate six points around each eye.
@@ -18,12 +17,21 @@ server.
 - Time-based state machine with hysteresis: awake, blinking, closed, alert, and tracking lost.
 - Repeating alarm when relative openness remains below `0.75` for one second.
 - Independent alarm when vertical head tilt exceeds `25°` for `0.75` seconds.
-- Debug view with landmarks, EAR, openness, closure duration, FPS, blink count, and chart.
+- Immediate alarm outside the head-pose range covered by calibration.
+- Lateral head-drop alarm with independent trigger and recovery thresholds.
+- Rolling PERCLOS over 30 and 60 seconds, excluding normal blinks and unreliable tracking.
+- Slow-closure count, average duration, longest recent closure, and tracking confidence.
+- Drowsiness levels: normal, possible drowsiness, drowsy, immediate alert, and tracking lost.
+- Brief cooldown-controlled warnings and an independent repeating urgent alarm.
+- Debug view with landmarks, EAR, openness, head pose, PERCLOS, confidence, FPS, and chart.
 - Persistent calibration profile in `data/calibration.json`.
-- Automated tests for geometry, calibration, head pose, display, and temporal logic.
+- Transition and session metrics in `data/events.jsonl`; no images or video are logged.
+- Recorded-video input for reproducible tuning and tests.
+- Automated tests for geometry, calibration, PERCLOS, alerts, video input, logging, and head pose.
 
-PERCLOS, gaze direction, multiple faces, and identity recognition are intentionally outside the
-MVP scope.
+Gaze direction, yawning, multiple faces, identity recognition, mobile deployment, and custom model
+training remain intentionally outside scope; they were not part of the post-MVP continuation in
+the original plan.
 
 ## Requirements
 
@@ -53,6 +61,9 @@ uv run eye-sentinel --recalibrate
 
 # Select a different camera
 uv run eye-sentinel --camera 1
+
+# Run the same detector against a recording (uses the saved calibration)
+uv run eye-sentinel --video recordings/test-drive.mp4
 
 # Use a different configuration file
 uv run eye-sentinel --config config/default.toml
@@ -99,14 +110,31 @@ head_tilt_recovered_threshold = 18.0
 head_side_tilt_threshold = 15.0
 head_side_tilt_recovered_threshold = 10.0
 head_tilt_alert_seconds = 0.75
+perclos_closed_threshold = 0.20
+perclos_short_window_seconds = 30.0
+perclos_window_seconds = 60.0
+perclos_drowsy_threshold = 0.20
+perclos_minimum_observation_seconds = 10.0
+slow_blink_seconds = 0.40
+possible_drowsiness_slow_blinks = 3
+recent_closure_window_seconds = 60.0
+maximum_sample_gap_seconds = 0.50
+tracking_lost_seconds = 2.0
 ```
 
 The closed and reopened thresholds apply to calibrated relative openness, not raw EAR. Their
 difference provides hysteresis and prevents state oscillation.
 
-The head-tilt rule uses pitch and lateral roll relative to the neutral pose learned during calibration. It applies
-before eye-pose validity checks, so a sustained nod can trigger the alarm even when the eye angle
-is no longer reliable. The lower recovery threshold prevents rapid toggling around `25°`.
+The head-tilt rule uses pitch and lateral roll relative to the neutral pose learned during
+calibration. The lower recovery thresholds prevent rapid state changes near the trigger. Entering
+an angle not covered by calibration triggers an immediate alarm because eye openness can no longer
+be compared safely with the learned references.
+
+PERCLOS is the proportion of reliable observed time spent below `perclos_closed_threshold`. Normal
+blinks are removed after they are classified, tracking gaps are excluded from the denominator, and
+intervals older than the configured rolling windows are discarded. A high PERCLOS produces a
+brief warning with cooldown; a continuous eye closure or unsafe head orientation still uses the
+independent repeating urgent alarm.
 
 Calibration learns vertical and horizontal extremes. Expected openness is interpolated separately
 for each eye because turning the head can deform one eye more than the other:
@@ -120,15 +148,45 @@ minimum_calibration_pitch_span = 12.0
 minimum_calibration_yaw_span = 15.0
 ```
 
-The application accepts the measured ranges plus a five-degree margin on each axis. Beyond those
-ranges it displays `ANGLE NOT COVERED BY CALIBRATION`, resets any active closure, and prevents an
-alarm. Recalibration is required after upgrading from an older profile format.
+The application accepts the measured ranges plus a five-degree margin on each axis. Confidence
+decreases as the head approaches those limits. Beyond them it displays
+`ALERT: ANGLE NOT COVERED BY CALIBRATION`, resets any active eye closure, and sounds the alarm.
+
+## Recorded-video evaluation
+
+Calibrate once with the webcam, then reuse that personal profile with a recording:
+
+```bash
+mkdir -p recordings
+uv run eye-sentinel --video recordings/test-drive.mp4
+```
+
+Video timestamps, rather than processing speed, drive all temporal rules, so a file produces the
+same result when processed on different machines. The run ends automatically at EOF. State
+transitions and the final PERCLOS/closure summary are appended to `data/events.jsonl`; recordings
+remain untouched and are not copied by the application.
+
+## Build a local macOS application
+
+Download the model once and build the PyInstaller specification:
+
+```bash
+uv run eye-sentinel --download-model
+uv run --with pyinstaller pyinstaller --clean packaging/eye-sentinel.spec
+open "dist/Eye Sentinel.app"
+```
+
+The bundle includes MediaPipe, the default configuration, and the model when it is present under
+`models/`. In the packaged app, calibration and event logs are written to
+`~/Library/Application Support/Eye Sentinel/`. macOS will request camera permission for the built
+application separately from Terminal.
 
 ## Development and tests
 
 ```bash
 uv run pytest
 uv run ruff check .
+git diff --check
 ```
 
 Core logic in `src/eyetracker/services/` does not import OpenCV or MediaPipe. Camera, tracking,
@@ -143,6 +201,6 @@ src/eyetracker/
 ├── config.py               # Typed configuration
 ├── domain.py               # Shared models and states
 ├── ports.py                # Infrastructure contracts
-├── adapters/               # OpenCV, MediaPipe, sound, and JSON
-└── services/               # EAR, calibration, head pose, and temporal detector
+├── adapters/               # OpenCV, MediaPipe, sound, JSONL, and persistence
+└── services/               # EAR, calibration, head pose, alerts, PERCLOS, and temporal rules
 ```

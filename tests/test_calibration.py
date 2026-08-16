@@ -68,6 +68,7 @@ def test_pose_outside_calibrated_range_makes_measurement_unreliable():
     normalized = service.normalize(tilted)
     assert not normalized.pose_valid
     assert not normalized.reliable
+    assert normalized.pose_confidence == 0.0
 
 
 @pytest.mark.parametrize(
@@ -80,6 +81,7 @@ def test_pitch_calibration_compensates_apparent_eye_aperture(
     service = calibrated_service()
     normalized = service.normalize(sample(3.0, left_ear, right_ear, pitch))
     assert normalized.pose_valid
+    assert 0.0 < normalized.pose_confidence < 1.0
     assert normalized.left_openness == pytest.approx(1.0)
     assert normalized.right_openness == pytest.approx(1.0)
 

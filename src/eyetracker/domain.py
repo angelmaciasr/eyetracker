@@ -34,6 +34,20 @@ class DrowsinessState(StrEnum):
     TRACKING_LOST = "tracking_lost"
 
 
+class DrowsinessLevel(StrEnum):
+    NORMAL = "normal"
+    POSSIBLE_DROWSINESS = "possible_drowsiness"
+    DROWSY = "drowsy"
+    IMMEDIATE_ALERT = "immediate_alert"
+    TRACKING_LOST = "tracking_lost"
+
+
+class AlarmSeverity(StrEnum):
+    NONE = "none"
+    WARNING = "warning"
+    URGENT = "urgent"
+
+
 @dataclass(frozen=True)
 class Point2D:
     x: float
@@ -90,6 +104,7 @@ class RelativeEyeMeasurement:
     pose_valid: bool = True
     pitch_delta: float | None = None
     roll_delta: float | None = None
+    pose_confidence: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -145,3 +160,13 @@ class DrowsinessAssessment:
     current_head_tilt_seconds: float = 0.0
     head_pitch_delta: float | None = None
     head_roll_delta: float | None = None
+    level: DrowsinessLevel = DrowsinessLevel.NORMAL
+    confidence: float = 1.0
+    alarm_severity: AlarmSeverity = AlarmSeverity.NONE
+    perclos_30_seconds: float = 0.0
+    perclos_60_seconds: float = 0.0
+    valid_observation_seconds: float = 0.0
+    slow_blinks_last_minute: int = 0
+    average_closure_seconds: float = 0.0
+    longest_closure_seconds: float = 0.0
+    current_tracking_lost_seconds: float = 0.0
