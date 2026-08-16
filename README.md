@@ -60,7 +60,7 @@ uv run eye-sentinel
 uv run eye-sentinel --recalibrate
 
 # Select a different camera
-uv run eye-sentinel --camera 1
+uv run eye-sentinel --camera 0
 
 # Run the same detector against a recording (uses the saved calibration)
 uv run eye-sentinel --video recordings/test-drive.mp4
@@ -75,6 +75,11 @@ Window controls:
 - `R`: recalibrate.
 - `M`: mute or unmute the alarm for the current session.
 - `Space`: start the displayed calibration step.
+
+Camera indices are assigned dynamically by macOS. The built-in Mac camera is usually `0`, but the
+index can change when an iPhone Continuity Camera or another webcam appears or disappears. If an
+index reports `out device of bound`, try `0` or run without `--camera` to use the configured
+default.
 
 ## Calibration
 
@@ -91,7 +96,7 @@ Calibration contains seven guided steps:
 Before every step, the application explains what to do and waits for `Space`. A confirmation sound
 marks the end of each step. Keep a stable distance and use even lighting. If the poses or open/closed
 references are not distinct enough, the application explains the failure and lets you press `Space`
-to restart without closing the program.
+to repeat only the failed step without closing the program or losing the completed steps.
 
 ## Configuration
 
