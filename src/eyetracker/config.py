@@ -59,6 +59,11 @@ class DetectorConfig:
     minimum_blink_seconds: float = 0.08
     maximum_blink_seconds: float = 0.40
     alert_after_closed_seconds: float = 1.00
+    head_tilt_threshold: float = 25.0
+    head_tilt_recovered_threshold: float = 18.0
+    head_side_tilt_threshold: float = 15.0
+    head_side_tilt_recovered_threshold: float = 10.0
+    head_tilt_alert_seconds: float = 0.75
 
 
 @dataclass(frozen=True)

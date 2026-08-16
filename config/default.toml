@@ -40,6 +40,11 @@ reopened_threshold = 0.85
 minimum_blink_seconds = 0.08
 maximum_blink_seconds = 0.40
 alert_after_closed_seconds = 1.00
+head_tilt_threshold = 25.0
+head_tilt_recovered_threshold = 18.0
+head_side_tilt_threshold = 15.0
+head_side_tilt_recovered_threshold = 10.0
+head_tilt_alert_seconds = 0.75
 
 [alarm]
 repeat_seconds = 0.9

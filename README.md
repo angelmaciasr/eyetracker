@@ -17,6 +17,7 @@ server.
 - `pitch`, `yaw`, and `roll` estimation relative to the calibrated neutral pose.
 - Time-based state machine with hysteresis: awake, blinking, closed, alert, and tracking lost.
 - Repeating alarm when relative openness remains below `0.75` for one second.
+- Independent alarm when vertical head tilt exceeds `25°` for `0.75` seconds.
 - Debug view with landmarks, EAR, openness, closure duration, FPS, blink count, and chart.
 - Persistent calibration profile in `data/calibration.json`.
 - Automated tests for geometry, calibration, head pose, display, and temporal logic.
@@ -93,10 +94,19 @@ reopened_threshold = 0.85
 minimum_blink_seconds = 0.08
 maximum_blink_seconds = 0.40
 alert_after_closed_seconds = 1.00
+head_tilt_threshold = 25.0
+head_tilt_recovered_threshold = 18.0
+head_side_tilt_threshold = 15.0
+head_side_tilt_recovered_threshold = 10.0
+head_tilt_alert_seconds = 0.75
 ```
 
 The closed and reopened thresholds apply to calibrated relative openness, not raw EAR. Their
 difference provides hysteresis and prevents state oscillation.
+
+The head-tilt rule uses pitch and lateral roll relative to the neutral pose learned during calibration. It applies
+before eye-pose validity checks, so a sustained nod can trigger the alarm even when the eye angle
+is no longer reliable. The lower recovery threshold prevents rapid toggling around `25°`.
 
 Calibration learns vertical and horizontal extremes. Expected openness is interpolated separately
 for each eye because turning the head can deform one eye more than the other:

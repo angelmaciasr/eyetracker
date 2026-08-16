@@ -28,6 +28,9 @@ class DrowsinessState(StrEnum):
     BLINKING = "blinking"
     EYES_CLOSED = "eyes_closed"
     ALERT = "alert"
+    HEAD_TILT = "head_tilt"
+    HEAD_TILT_ALERT = "head_tilt_alert"
+    CALIBRATION_RANGE_ALERT = "calibration_range_alert"
     TRACKING_LOST = "tracking_lost"
 
 
@@ -85,6 +88,8 @@ class RelativeEyeMeasurement:
     reliable: bool
     head_pose: HeadPose | None = None
     pose_valid: bool = True
+    pitch_delta: float | None = None
+    roll_delta: float | None = None
 
 
 @dataclass(frozen=True)
@@ -137,3 +142,6 @@ class DrowsinessAssessment:
     blink_count: int
     should_alert: bool
     reason: str | None = None
+    current_head_tilt_seconds: float = 0.0
+    head_pitch_delta: float | None = None
+    head_roll_delta: float | None = None

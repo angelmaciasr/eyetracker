@@ -12,7 +12,13 @@ from ..domain import (
 class TemporalDrowsinessDetector:
     def __init__(self, config: DetectorConfig) -> None:
         if config.reopened_threshold <= config.closed_threshold:
-            raise ValueError("reopened_threshold debe superar closed_threshold")
+            raise ValueError("reopened_threshold must be greater than closed_threshold")
+        if config.head_tilt_recovered_threshold >= config.head_tilt_threshold:
+            raise ValueError("head_tilt_recovered_threshold must be lower than head_tilt_threshold")
+        if config.head_side_tilt_recovered_threshold >= config.head_side_tilt_threshold:
+            raise ValueError(
+                "head_side_tilt_recovered_threshold must be lower than head_side_tilt_threshold"
+            )
         self.config = config
         self.maximum_blink_seconds = config.maximum_blink_seconds
         self.reset()
@@ -25,8 +31,27 @@ class TemporalDrowsinessDetector:
         self._closed = False
         self._last_blink: float | None = None
         self._blink_count = 0
+        self._head_tilt_started: float | None = None
+        self._head_tilt_active = False
 
     def update(self, measurement: RelativeEyeMeasurement) -> DrowsinessAssessment:
+        if not measurement.pose_valid:
+            self._closure_started = None
+            self._closed = False
+            self._head_tilt_started = None
+            self._head_tilt_active = False
+            return self._assessment(
+                measurement.timestamp,
+                DrowsinessState.CALIBRATION_RANGE_ALERT,
+                0.0,
+                True,
+                "head_pose_outside_calibrated_range",
+                pitch_delta=measurement.pitch_delta,
+                roll_delta=measurement.roll_delta,
+            )
+        head_assessment = self._update_head_tilt(measurement)
+        if head_assessment is not None:
+            return head_assessment
         if not measurement.reliable:
             return self.tracking_lost(measurement.timestamp)
 
@@ -67,12 +92,57 @@ class TemporalDrowsinessDetector:
     def tracking_lost(self, timestamp: float) -> DrowsinessAssessment:
         self._closure_started = None
         self._closed = False
+        self._head_tilt_started = None
+        self._head_tilt_active = False
         return self._assessment(
             timestamp,
             DrowsinessState.TRACKING_LOST,
             0.0,
             False,
             "face_or_eyes_not_reliable",
+        )
+
+    def _update_head_tilt(self, measurement: RelativeEyeMeasurement) -> DrowsinessAssessment | None:
+        pitch_delta = measurement.pitch_delta
+        roll_delta = measurement.roll_delta
+        if pitch_delta is None and roll_delta is None:
+            self._head_tilt_started = None
+            self._head_tilt_active = False
+            return None
+        pitch_threshold = (
+            self.config.head_tilt_recovered_threshold
+            if self._head_tilt_active
+            else self.config.head_tilt_threshold
+        )
+        roll_threshold = (
+            self.config.head_side_tilt_recovered_threshold
+            if self._head_tilt_active
+            else self.config.head_side_tilt_threshold
+        )
+        pitch_tilted = pitch_delta is not None and abs(pitch_delta) >= pitch_threshold
+        roll_tilted = roll_delta is not None and abs(roll_delta) >= roll_threshold
+        if not pitch_tilted and not roll_tilted:
+            self._head_tilt_started = None
+            self._head_tilt_active = False
+            return None
+
+        if self._head_tilt_started is None:
+            self._head_tilt_started = measurement.timestamp
+        self._head_tilt_active = True
+        self._closure_started = None
+        self._closed = False
+        duration = max(0.0, measurement.timestamp - self._head_tilt_started)
+        should_alert = duration >= self.config.head_tilt_alert_seconds
+        state = DrowsinessState.HEAD_TILT_ALERT if should_alert else DrowsinessState.HEAD_TILT
+        return self._assessment(
+            measurement.timestamp,
+            state,
+            0.0,
+            should_alert,
+            "head_tilt_too_long" if should_alert else None,
+            head_tilt=duration,
+            pitch_delta=pitch_delta,
+            roll_delta=roll_delta,
         )
 
     def _assessment(
@@ -82,6 +152,9 @@ class TemporalDrowsinessDetector:
         closure: float,
         alert: bool,
         reason: str | None,
+        head_tilt: float = 0.0,
+        pitch_delta: float | None = None,
+        roll_delta: float | None = None,
     ) -> DrowsinessAssessment:
         return DrowsinessAssessment(
             timestamp=timestamp,
@@ -91,4 +164,7 @@ class TemporalDrowsinessDetector:
             blink_count=self._blink_count,
             should_alert=alert,
             reason=reason,
+            current_head_tilt_seconds=head_tilt,
+            head_pitch_delta=pitch_delta,
+            head_roll_delta=roll_delta,
         )

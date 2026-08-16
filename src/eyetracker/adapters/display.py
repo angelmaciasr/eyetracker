@@ -56,12 +56,32 @@ class OpenCVDisplay:
         if relative is not None:
             self._text(canvas, f"Openness: {relative.combined_openness:.2f}", 14, 82)
         self._text(canvas, f"Closure: {assessment.current_closure_seconds:.2f} s", 210, 82)
+        if assessment.head_pitch_delta is not None or assessment.head_roll_delta is not None:
+            pitch = assessment.head_pitch_delta or 0.0
+            roll = assessment.head_roll_delta or 0.0
+            self._text(
+                canvas,
+                f"Head tilt P/R: {pitch:+.1f} / {roll:+.1f} deg / "
+                f"{assessment.current_head_tilt_seconds:.2f} s",
+                430,
+                82,
+            )
         self._text(canvas, f"Blinks: {assessment.blink_count}", 14, 109)
         self._text(canvas, "Q quit   R recalibrate   M mute", 210, 109, (190, 190, 190))
         self._draw_graph(canvas, y_top=max(135, frame.height - 145), width=360, height=115)
-        if assessment.state is DrowsinessState.ALERT:
+        if assessment.state in (
+            DrowsinessState.ALERT,
+            DrowsinessState.HEAD_TILT_ALERT,
+            DrowsinessState.CALIBRATION_RANGE_ALERT,
+        ):
             cv2.rectangle(canvas, (3, 3), (frame.width - 4, frame.height - 4), color, 8)
-            self._center_text(canvas, "ALERT: OPEN YOUR EYES", frame.height // 2, color, 1.15)
+            if assessment.state is DrowsinessState.CALIBRATION_RANGE_ALERT:
+                message = "ALERT: ANGLE NOT COVERED BY CALIBRATION"
+            elif assessment.state is DrowsinessState.HEAD_TILT_ALERT:
+                message = "ALERT: RETURN YOUR HEAD TO NEUTRAL"
+            else:
+                message = "ALERT: OPEN YOUR EYES"
+            self._center_text(canvas, message, frame.height // 2, color, 1.05)
         elif relative is not None and not relative.pose_valid:
             self._center_text(
                 canvas,
@@ -181,6 +201,9 @@ class OpenCVDisplay:
             DrowsinessState.BLINKING: (80, 210, 250),
             DrowsinessState.EYES_CLOSED: (40, 150, 255),
             DrowsinessState.ALERT: (40, 40, 255),
+            DrowsinessState.HEAD_TILT: (40, 180, 255),
+            DrowsinessState.HEAD_TILT_ALERT: (40, 40, 255),
+            DrowsinessState.CALIBRATION_RANGE_ALERT: (40, 40, 255),
             DrowsinessState.TRACKING_LOST: (160, 160, 160),
         }[state]
 

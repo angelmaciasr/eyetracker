@@ -9,7 +9,7 @@ from ..domain import (
     RawEyeMeasurement,
     RelativeEyeMeasurement,
 )
-from .head_pose import angular_distance, signed_angular_delta
+from .head_pose import signed_angular_delta
 
 
 class CalibrationError(RuntimeError):
@@ -280,11 +280,14 @@ class PersonalCalibrationService:
             return min(1.2, max(0.0, normalized))
 
         pose_valid = True
+        pitch_delta: float | None = None
+        roll_delta: float | None = None
         left_ear = sample.left_ear
         right_ear = sample.right_ear
         if sample.head_pose is not None:
             pitch_delta = signed_angular_delta(sample.head_pose.pitch, self.profile.neutral_pitch)
             yaw_delta = signed_angular_delta(sample.head_pose.yaw, self.profile.neutral_yaw)
+            roll_delta = signed_angular_delta(sample.head_pose.roll, self.profile.neutral_roll)
             pitch_lower = self.profile.pitch_lower_delta
             pitch_upper = self.profile.pitch_upper_delta
             yaw_lower = self.profile.yaw_lower_delta
@@ -296,8 +299,7 @@ class PersonalCalibrationService:
                 and yaw_lower - self.head_pose_config.yaw_range_margin
                 <= yaw_delta
                 <= yaw_upper + self.head_pose_config.yaw_range_margin
-                and angular_distance(sample.head_pose.roll, self.profile.neutral_roll)
-                <= self.head_pose_config.maximum_roll_delta
+                and abs(roll_delta) <= self.head_pose_config.maximum_roll_delta
             )
             pitch_left = self._expected_open_ear(
                 pitch_delta,
@@ -356,6 +358,8 @@ class PersonalCalibrationService:
             reliable=sample.reliable and pose_valid,
             head_pose=sample.head_pose,
             pose_valid=pose_valid,
+            pitch_delta=pitch_delta,
+            roll_delta=roll_delta,
         )
 
     @staticmethod
